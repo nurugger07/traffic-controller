@@ -44,7 +44,7 @@ defmodule TrafficController.LightController do
     {:noreply, state}
   end
 
-  def handle_call(:can_go?, _from, state) when state in [%{farm: :green}, %{farm: :yellow}] do
+  def handle_call(:can_go?, _from, state) when state in [%{farm: :green, highway: :red}, %{farm: :yellow, highway: :red}] do
     {:reply, true, state}
   end
 
@@ -57,27 +57,28 @@ defmodule TrafficController.LightController do
     {:noreply, state}
   end
 
+  def handle_cast(:transition, %{farm: :red, highway: :green} = state) do
+    Logger.info("Current intersection signals #{inspect state}")
+    if VehicleDetection.vehicle_waiting?() do
+      {:noreply, @states[:S1]}
+    else
+      {:noreply, state}
+    end
+  end
+
   def handle_cast(:transition, state) do
     Logger.info("Current intersection signals #{inspect state}")
-    new_state = if VehicleDetection.vehicle_waiting?() do
-        case state do
-          %{farm: :red, highway: :green} ->
-            transition(2000)
-            @states[:S1]
-          %{farm: :red, highway: :yellow} ->
-            transition(2000)
-            @states[:S2]
-          %{farm: :green, highway: :red} ->
-            ShortTimer.start_timer()
-            @states[:S3]
-          %{farm: :yellow, highway: :red} ->
-            transition(2000)
-            @states[:S0]
-        end
-    else
-      state
-    end
-
+    new_state = case state do
+                  %{farm: :red, highway: :yellow} ->
+                    transition(2000)
+                    @states[:S2]
+                  %{farm: :green, highway: :red} ->
+                    ShortTimer.start_timer()
+                    @states[:S3]
+                  %{farm: :yellow, highway: :red} ->
+                    transition(2000)
+                    @states[:S0]
+                end
     {:noreply, new_state}
   end
 
